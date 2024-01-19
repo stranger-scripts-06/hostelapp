@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:hostel_app/getMemberDetails.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class CommitteePage extends StatefulWidget {
   @override
@@ -54,11 +54,11 @@ class _CommitteePageState extends State<CommitteePage> {
                                 ),
                               ),
                               onTap: () {
-                                // Handle the tap event, for example, navigate to committee details
+                                // Handle the tap event
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => CommitteeDetailsPage(
+                                    builder: (context) => MembersPage(
                                       committeeId: docIDs[index],
                                     ),
                                   ),
@@ -80,30 +80,109 @@ class _CommitteePageState extends State<CommitteePage> {
   }
 }
 
-class CommitteeDetailsPage extends StatelessWidget {
+class MembersPage extends StatelessWidget {
   final String committeeId;
 
-  CommitteeDetailsPage({required this.committeeId});
+  MembersPage({required this.committeeId});
 
   @override
   Widget build(BuildContext context) {
-    // Implement the UI for committee details, similar to the CommitteePage
-    // You can use another FutureBuilder to fetch and display details based on committeeId
     return Scaffold(
       appBar: AppBar(
-        title: Text('Committee Details'),
+        title: Text('$committeeId'),
       ),
       body: Center(
         child: FutureBuilder(
-          // Fetch committee details based on committeeId
-          future: getCommitteeDetails(committeeId),
+          future: getMembers(committeeId),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return CircularProgressIndicator();
+            } else if (snapshot.hasError) {
+              return Text('Error: ${snapshot.error}');
             } else {
-              // Implement UI to display committee details
-              // Example: Text(snapshot.data['committeeName'])
-              return Container();
+              List<Member> members = snapshot.data as List<Member>;
+              return ListView.builder(
+                itemCount: members.length,
+                itemBuilder: (context, index) {
+                  Member member = members[index];
+                  return Card(
+                    elevation: 3,
+                    margin: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+      color: Color.fromRGBO(255, 255, 255, 1), // Set the desired background color
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(width: 0.5),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.2), // Add a subtle shadow
+          spreadRadius: 2,
+          blurRadius: 4,
+          offset: Offset(0, 2),
+        ),
+      ],
+    ),
+                      child: ListTile(
+                      
+                        title: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundImage: NetworkImage(member.photoUrl),
+                            ),
+                            SizedBox(width: 20),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  member.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 25,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  member.designation,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Contact Number: ',
+                                      style: TextStyle(
+                                        color: Colors.black,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    InkWell(
+                                      onTap: () {
+                                        launch('tel:${member.phoneNumber}');
+                                      },
+                                      child: Text(
+                                        member.phoneNumber,
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        contentPadding: EdgeInsets.all(16),
+                      ),
+                    ),
+                  );
+                },
+              );
             }
           },
         ),
@@ -111,14 +190,41 @@ class CommitteeDetailsPage extends StatelessWidget {
     );
   }
 
-  Future<Map<String, dynamic>> getCommitteeDetails(String committeeId) async {
-    // Implement the logic to fetch committee details based on committeeId
-    // For example, use Firestore to get document data
-    DocumentSnapshot document = await FirebaseFirestore.instance
-        .collection('Committees')
-        .doc(committeeId)
-        .get();
+  Future<List<Member>> getMembers(String committeeId) async {
+  QuerySnapshot snapshot = await FirebaseFirestore.instance
+      .collection('Committees')
+      .doc(committeeId)
+      .collection('Members')
+      .orderBy('position')
+      .get();
 
-    return document.data() as Map<String, dynamic>;
+  List<Member> members = snapshot.docs
+      .map((doc) => Member.fromMap(doc.data() as Map<String, dynamic>))
+      .toList();
+
+  return members;
+}
+}
+
+class Member {
+  final String name;
+  final String designation;
+  final String phoneNumber;
+  final String photoUrl;
+
+  Member({
+    required this.name,
+    required this.designation,
+    required this.phoneNumber,
+    required this.photoUrl,
+  });
+
+  factory Member.fromMap(Map<String, dynamic> map) {
+    return Member(
+      name: map['name'] ?? '',
+      designation: map['designation'] ?? '',
+      phoneNumber: map['phoneNumber'] ?? '',
+      photoUrl: map['photoUrl'] ?? '',
+    );
   }
 }
